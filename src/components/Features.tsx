@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Check, Leaf, Earth, Recycle, SignPost } from 'lucide-react';
+import { Check, Leaf, Earth, Recycle, Signpost } from 'lucide-react';
 
 const Features = () => {
   const features = [
@@ -8,7 +8,7 @@ const Features = () => {
       id: 1,
       title: "Smart Donation Listings",
       description: "Easily list surplus items with our intuitive platform. Categorize by food, clothing, or other items, set availability times, and include photos.",
-      icon: SignPost,
+      icon: Signpost,
       benefits: [
         "Geo-location tagging for local matching",
         "Real-time availability updates",
@@ -32,7 +32,7 @@ const Features = () => {
       id: 3,
       title: "Streamlined Logistics",
       description: "Our platform connects donors directly with receivers and provides tools to coordinate pickup or delivery seamlessly.",
-      icon: SignPost,
+      icon: Signpost,
       benefits: [
         "In-app scheduling",
         "Route optimization",

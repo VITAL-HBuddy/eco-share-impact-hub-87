@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { CheckCircle, Leaf, User, HandHeart, Arrow } from 'lucide-react';
+import { CheckCircle, Leaf, User, HandHeart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const HowItWorks = () => {

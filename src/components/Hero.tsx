@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Recycle, Earth, HandHeart } from 'lucide-react';
+import { ArrowRight, Recycle, Earth, HandHeart, Leaf } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const Hero = () => {
