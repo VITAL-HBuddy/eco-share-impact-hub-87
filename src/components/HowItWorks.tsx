@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { CheckCircle, Leaf, User, HandHeart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -62,7 +61,10 @@ const HowItWorks = () => {
       </div>
 
       <div className="mt-16 text-center">
-        <Button className="cta-button bg-primary hover:bg-primary/90 text-white">
+        <Button
+          className="cta-button bg-primary hover:bg-primary/90 text-white"
+          onClick={() => window.location.href = '/register'}
+        >
           Start Donating Today
         </Button>
       </div>

@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -74,11 +73,20 @@ const Navbar = () => {
 
           {/* CTA Buttons */}
           <div className="hidden md:flex items-center space-x-4">
-            <Button variant="outline" size="sm" className="rounded-full border-primary text-primary hover:bg-primary hover:text-white">
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full border-primary text-primary hover:bg-primary hover:text-white"
+              onClick={() => window.location.href = '/login'}
+            >
               <User className="mr-2 h-4 w-4" />
               Login
             </Button>
-            <Button size="sm" className="rounded-full bg-primary hover:bg-primary/90">
+            <Button
+              size="sm"
+              className="rounded-full bg-primary hover:bg-primary/90"
+              onClick={() => window.location.href = '/register'}
+            >
               Get Started
             </Button>
           </div>

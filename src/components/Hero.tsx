@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, Recycle, Earth, HandHeart, Leaf } from 'lucide-react';
@@ -19,11 +18,18 @@ const Hero = () => {
               turning potential waste into valuable resources while tracking your environmental impact.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 pt-4">
-              <Button className="cta-button bg-primary hover:bg-primary/90 text-white">
+              <Button
+                className="cta-button bg-primary hover:bg-primary/90 text-white"
+                onClick={() => window.location.href = '/register'}
+              >
                 Donate Now
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
-              <Button variant="outline" className="cta-button border-primary text-primary hover:bg-primary/10">
+              <Button
+                variant="outline"
+                className="cta-button border-primary text-primary hover:bg-primary/10"
+                onClick={() => window.location.href = '/register'}
+              >
                 Join as NGO
               </Button>
             </div>
@@ -64,11 +70,11 @@ const Hero = () => {
           </div>
         </div>
 
-        <div className="mt-20 text-center">
+        {/* <div className="mt-20 text-center">
           <h2 className="text-2xl md:text-3xl font-bold mb-6">Trusted by Organizations Across India</h2>
-          <div className="flex flex-wrap justify-center items-center gap-8 md:gap-12 opacity-70">
+          <div className="flex flex-wrap justify-center items-center gap-8 md:gap-12 opacity-70"> */}
             {/* Placeholder for partner logos */}
-            <div className="bg-gray-200 h-12 w-32 rounded-md flex items-center justify-center">
+            {/* <div className="bg-gray-200 h-12 w-32 rounded-md flex items-center justify-center">
               <span className="text-gray-500 font-medium">Partner 1</span>
             </div>
             <div className="bg-gray-200 h-12 w-32 rounded-md flex items-center justify-center">
@@ -81,7 +87,7 @@ const Hero = () => {
               <span className="text-gray-500 font-medium">Partner 4</span>
             </div>
           </div>
-        </div>
+        </div> */}
       </div>
     </div>
   );

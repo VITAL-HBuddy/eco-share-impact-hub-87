@@ -19,7 +19,7 @@ const Footer = () => {
             <p className="text-gray-400 mb-4">
               Connecting surplus with need, EcoShare is building a sustainable ecosystem of giving across India.
             </p>
-            <div className="flex space-x-4">
+            {/* <div className="flex space-x-4">
               <a href="#" className="text-gray-400 hover:text-primary transition-colors">
                 <Facebook className="h-5 w-5" />
               </a>
@@ -29,7 +29,7 @@ const Footer = () => {
               <a href="#" className="text-gray-400 hover:text-primary transition-colors">
                 <Twitter className="h-5 w-5" />
               </a>
-            </div>
+            </div> */}
           </div>
 
           {/* Quick Links */}
@@ -97,7 +97,7 @@ const Footer = () => {
           </div>
 
           {/* Contact */}
-          <div>
+          {/* <div>
             <h3 className="text-lg font-medium mb-4">Contact Us</h3>
             <ul className="space-y-3">
               <li className="flex items-start">
@@ -120,7 +120,7 @@ const Footer = () => {
                 </a>
               </li>
             </ul>
-          </div>
+          </div> */}
         </div>
 
         <hr className="border-gray-800 my-8" />
@@ -129,11 +129,11 @@ const Footer = () => {
           <p className="text-gray-500 text-sm mb-4 md:mb-0">
             © {new Date().getFullYear()} EcoShare. All rights reserved.
           </p>
-          <div className="flex space-x-4 text-sm text-gray-500">
+          {/* <div className="flex space-x-4 text-sm text-gray-500">
             <a href="#" className="hover:text-primary transition-colors">NGO Login</a>
             <a href="#" className="hover:text-primary transition-colors">Partner Directory</a>
             <a href="#" className="hover:text-primary transition-colors">Resources</a>
-          </div>
+          </div> */}
         </div>
       </div>
     </footer>
