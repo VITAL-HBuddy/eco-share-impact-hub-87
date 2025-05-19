@@ -1,168 +1,249 @@
 
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast";
+import { 
+  Card, 
+  CardContent, 
+  CardDescription, 
+  CardFooter,
+  CardHeader, 
+  CardTitle 
+} from "@/components/ui/card";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Separator } from "@/components/ui/separator";
 
-const ngoFormSchema = z.object({
-  // Organization Details
-  ngoName: z.string().min(3, { message: "NGO name must be at least 3 characters" }),
-  registeredAddress: z.string().min(5, { message: "Address is required" }),
-  city: z.string().min(2, { message: "City is required" }),
-  state: z.string().min(2, { message: "State is required" }),
-  yearEstablished: z.string().regex(/^\d{4}$/, { message: "Enter a valid year (e.g. 2020)" }),
+// Form schema
+const formSchema = z.object({
+  // Section A: Organization Details
+  email: z.string().email("Please enter a valid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  confirmPassword: z.string(),
+  ngoName: z.string().min(2, "NGO name is required"),
+  registeredAddress: z.string().min(5, "Registered address is required"),
+  city: z.string().min(2, "City is required"),
+  state: z.string().min(2, "State is required"),
+  yearEstablished: z.coerce.number()
+    .int("Year must be a whole number")
+    .min(1900, "Year must be after 1900")
+    .max(new Date().getFullYear(), "Year cannot be in the future"),
   ngoType: z.enum(["Trust", "Society", "Section 8", "Other"]),
-  registrationNumber: z.string().min(3, { message: "Registration number is required" }),
-  issuingAuthority: z.string().min(3, { message: "Issuing authority is required" }),
+  registrationNumber: z.string().min(3, "Registration number is required"),
+  issuingAuthority: z.string().min(3, "Issuing authority is required"),
   
-  // Point of Contact
-  contactName: z.string().min(3, { message: "Contact name is required" }),
-  designation: z.string().min(2, { message: "Designation is required" }),
-  phoneNumber: z.string().min(10, { message: "Valid phone number is required" }),
-  email: z.string().email({ message: "Invalid email address" }),
-  password: z.string().min(8, { message: "Password must be at least 8 characters" }),
-  confirmPassword: z.string().min(8, { message: "Confirm password is required" }),
+  // Section B: Point of Contact
+  representativeName: z.string().min(2, "Representative name is required"),
+  designation: z.string().min(2, "Designation is required"),
+  phone: z.string().min(10, "Phone number is required"),
+  contactEmail: z.string().email("Please enter a valid email address"),
   
-  // Causes
-  causes: z.array(z.string()).min(1, { message: "Select at least one cause" }),
+  // Section C: Document Uploads - will be handled separately with file inputs
+  
+  // Section D: Mission & Focus
+  causes: z.array(z.string()).min(1, "Please select at least one cause"),
   otherCause: z.string().optional(),
-  
-  // Terms
-  agreeTerms: z.boolean().refine(val => val === true, { message: "You must agree to terms and conditions" })
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords do not match",
+}).refine(data => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
   path: ["confirmPassword"],
 });
 
-type NGOFormValues = z.infer<typeof ngoFormSchema>;
+type FormValues = z.infer<typeof formSchema>;
 
 const NGORegistrationForm = () => {
-  const { signUp } = useAuth();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
   
-  const form = useForm<NGOFormValues>({
-    resolver: zodResolver(ngoFormSchema),
+  // Initialize form
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
     defaultValues: {
+      email: "",
+      password: "",
+      confirmPassword: "",
       ngoName: "",
       registeredAddress: "",
       city: "",
       state: "",
-      yearEstablished: "",
+      yearEstablished: new Date().getFullYear(),
       ngoType: "Trust",
       registrationNumber: "",
       issuingAuthority: "",
-      contactName: "",
+      representativeName: "",
       designation: "",
-      phoneNumber: "",
-      email: "",
-      password: "",
-      confirmPassword: "",
+      phone: "",
+      contactEmail: "",
       causes: [],
       otherCause: "",
-      agreeTerms: false
-    }
+    },
   });
   
-  const onSubmit = async (values: NGOFormValues) => {
-    setIsSubmitting(true);
-    
-    try {
-      // Register user with Supabase Auth
-      const { error: signUpError, data } = await signUp(
-        values.email,
-        values.password,
-        "ngo", // role
-        { name: values.contactName }
-      );
-      
-      if (signUpError || !data.user) {
-        throw new Error(signUpError?.message || "Failed to create account");
-      }
-      
-      const userId = data.user.id;
-      
-      // Create NGO profile
-      const { error: profileError } = await supabase.from("ngo_profiles").insert({
-        id: userId,
-        ngo_name: values.ngoName,
-        registered_address: values.registeredAddress,
-        city: values.city,
-        state: values.state,
-        year_established: parseInt(values.yearEstablished),
-        ngo_type: values.ngoType,
-        registration_number: values.registrationNumber,
-        issuing_authority: values.issuingAuthority
+  // Form documents state
+  const [documents, setDocuments] = useState({
+    registrationCertificate: null as File | null,
+    panCard: null as File | null,
+    taxCertificate: null as File | null,
+    fcraCertificate: null as File | null,
+    idProof: null as File | null,
+  });
+  
+  // Cause options
+  const causeOptions = [
+    { id: "orphan-care", label: "Orphan care" },
+    { id: "women-welfare", label: "Women welfare" },
+    { id: "elderly-support", label: "Elderly support" },
+    { id: "hunger-relief", label: "Hunger relief" },
+    { id: "education", label: "Education" },
+    { id: "other", label: "Other" },
+  ];
+  
+  const handleDocumentChange = (e: React.ChangeEvent<HTMLInputElement>, documentType: keyof typeof documents) => {
+    if (e.target.files && e.target.files[0]) {
+      setDocuments({
+        ...documents,
+        [documentType]: e.target.files[0],
       });
-      
-      if (profileError) {
-        throw new Error(profileError.message);
-      }
-      
-      // Create NGO contact
-      const { error: contactError } = await supabase.from("ngo_contacts").insert({
-        ngo_id: userId,
-        representative_name: values.contactName,
-        designation: values.designation,
-        phone_number: values.phoneNumber,
-        email: values.email
-      });
-      
-      if (contactError) {
-        throw new Error(contactError.message);
-      }
-      
-      // Add causes
-      for (const causeName of values.causes) {
-        // Get cause ID from name
-        const { data: causeData, error: causeError } = await supabase
-          .from("causes")
-          .select("id")
-          .eq("name", causeName)
-          .single();
-        
-        if (causeError || !causeData) {
-          console.error("Error finding cause:", causeName, causeError);
-          continue;
-        }
-        
-        // Create ngo_cause relationship
-        const otherDescription = causeName === "Other" ? values.otherCause : null;
-        await supabase.from("ngo_causes").insert({
-          ngo_id: userId,
-          cause_id: causeData.id,
-          other_description: otherDescription
-        });
-      }
-      
-      toast({
-        title: "Registration successful!",
-        description: "Your NGO account has been created. Please check your email to verify your account.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Registration failed",
-        description: error.message || "An unexpected error occurred",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSubmitting(false);
     }
   };
   
+  const onSubmit = async (values: FormValues) => {
+    setLoading(true);
+    
+    try {
+      // 1. Register the user with Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: values.email,
+        password: values.password,
+        options: {
+          data: {
+            role: "ngo",
+          },
+        },
+      });
+      
+      if (authError) throw authError;
+      
+      if (authData.user) {
+        const userId = authData.user.id;
+        
+        // 2. Insert NGO profile data
+        const { error: profileError } = await supabase
+          .from("ngo_profiles")
+          .insert({
+            id: userId,
+            ngo_name: values.ngoName,
+            registered_address: values.registeredAddress,
+            city: values.city,
+            state: values.state,
+            year_established: values.yearEstablished,
+            ngo_type: values.ngoType,
+            registration_number: values.registrationNumber,
+            issuing_authority: values.issuingAuthority,
+          });
+          
+        if (profileError) throw profileError;
+        
+        // 3. Insert contact information
+        const { error: contactError } = await supabase
+          .from("ngo_contacts")
+          .insert({
+            ngo_id: userId,
+            representative_name: values.representativeName,
+            designation: values.designation,
+            phone_number: values.phone,
+            email: values.contactEmail,
+          });
+          
+        if (contactError) throw contactError;
+        
+        // 4. Insert causes
+        for (const cause of values.causes) {
+          // Get cause ID from name
+          const { data: causeData } = await supabase
+            .from("causes")
+            .select("id")
+            .eq("name", cause)
+            .single();
+            
+          if (causeData) {
+            await supabase.from("ngo_causes").insert({
+              ngo_id: userId,
+              cause_id: causeData.id,
+              other_description: cause === "Other" ? values.otherCause : null,
+            });
+          }
+        }
+        
+        // 5. Upload documents
+        if (documents.registrationCertificate) {
+          const filePath = `${userId}/registration_certificate_${documents.registrationCertificate.name}`;
+          
+          const { error: uploadError } = await supabase.storage
+            .from("ngo_documents")
+            .upload(filePath, documents.registrationCertificate);
+            
+          if (!uploadError) {
+            await supabase.from("ngo_documents").insert({
+              ngo_id: userId,
+              document_type: "registration_certificate",
+              file_path: filePath,
+            });
+          }
+        }
+        
+        // Upload other documents similarly...
+        
+        toast({
+          title: "Registration successful!",
+          description: "Please check your email to verify your account. Your profile will be reviewed by our team.",
+        });
+        
+        navigate("/login");
+      }
+    } catch (error) {
+      console.error("Registration error:", error);
+      toast({
+        title: "Registration failed",
+        description: "There was an error registering your account. Please try again.",
+        variant: "destructive",
+      });
+    }
+    
+    setLoading(false);
+  };
+
   const nextStep = () => {
+    let canProceed = false;
+    
     if (step === 1) {
-      // Validate first step fields
       const result = form.trigger([
+        "email", 
+        "password", 
+        "confirmPassword", 
         "ngoName", 
         "registeredAddress", 
         "city", 
@@ -172,50 +253,34 @@ const NGORegistrationForm = () => {
         "registrationNumber", 
         "issuingAuthority"
       ]);
-      
-      if (result) {
-        setStep(2);
-      }
+      canProceed = result;
     } else if (step === 2) {
-      // Validate second step fields
       const result = form.trigger([
-        "contactName",
-        "designation",
-        "phoneNumber",
-        "email",
-        "password",
-        "confirmPassword"
+        "representativeName", 
+        "designation", 
+        "phone", 
+        "contactEmail"
       ]);
-      
-      if (result) {
-        setStep(3);
-      }
+      canProceed = result;
+    } else {
+      canProceed = true;
+    }
+    
+    if (canProceed) {
+      setStep(Math.min(step + 1, 4));
     }
   };
   
   const prevStep = () => {
-    if (step > 1) {
-      setStep(step - 1);
-    }
+    setStep(Math.max(step - 1, 1));
   };
   
-  const causeOptions = [
-    "Orphan care",
-    "Women welfare",
-    "Elderly support",
-    "Hunger relief",
-    "Education",
-    "Other"
-  ];
-  
   return (
-    <Card className="w-full max-w-3xl mx-auto">
+    <Card>
       <CardHeader>
-        <CardTitle>Register as an NGO</CardTitle>
+        <CardTitle>NGO Registration</CardTitle>
         <CardDescription>
-          {step === 1 && "Step 1: Organization Details"}
-          {step === 2 && "Step 2: Contact Information"}
-          {step === 3 && "Step 3: Mission & Focus"}
+          Register your NGO to connect with donors and make a difference
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -223,14 +288,66 @@ const NGORegistrationForm = () => {
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             {step === 1 && (
               <div className="space-y-4">
+                <h3 className="text-lg font-medium">Account & Organization Details</h3>
+                <Separator className="my-4" />
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email Address*</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="email" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Password*</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="password" />
+                        </FormControl>
+                        <FormDescription>
+                          At least 8 characters
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                
+                <FormField
+                  control={form.control}
+                  name="confirmPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Confirm Password*</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="password" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <Separator className="my-4" />
+                
                 <FormField
                   control={form.control}
                   name="ngoName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>NGO Name</FormLabel>
+                      <FormLabel>NGO Name*</FormLabel>
                       <FormControl>
-                        <Input placeholder="Enter NGO name" {...field} />
+                        <Input {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -242,24 +359,24 @@ const NGORegistrationForm = () => {
                   name="registeredAddress"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Registered Address</FormLabel>
+                      <FormLabel>Registered Address*</FormLabel>
                       <FormControl>
-                        <Input placeholder="Enter registered address" {...field} />
+                        <Textarea {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
                 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="city"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>City</FormLabel>
+                        <FormLabel>City*</FormLabel>
                         <FormControl>
-                          <Input placeholder="Enter city" {...field} />
+                          <Input {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -271,9 +388,9 @@ const NGORegistrationForm = () => {
                     name="state"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>State</FormLabel>
+                        <FormLabel>State*</FormLabel>
                         <FormControl>
-                          <Input placeholder="Enter state" {...field} />
+                          <Input {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -281,84 +398,91 @@ const NGORegistrationForm = () => {
                   />
                 </div>
                 
-                <FormField
-                  control={form.control}
-                  name="yearEstablished"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Year of Establishment</FormLabel>
-                      <FormControl>
-                        <Input placeholder="YYYY" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="ngoType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>NGO Type</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="yearEstablished"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Year of Establishment*</FormLabel>
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select NGO type" />
-                          </SelectTrigger>
+                          <Input {...field} type="number" min="1900" max={new Date().getFullYear()} />
                         </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Trust">Trust</SelectItem>
-                          <SelectItem value="Society">Society</SelectItem>
-                          <SelectItem value="Section 8">Section 8</SelectItem>
-                          <SelectItem value="Other">Other</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="ngoType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>NGO Type*</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select NGO type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="Trust">Trust</SelectItem>
+                            <SelectItem value="Society">Society</SelectItem>
+                            <SelectItem value="Section 8">Section 8</SelectItem>
+                            <SelectItem value="Other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
                 
-                <FormField
-                  control={form.control}
-                  name="registrationNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Registration Number</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Enter registration number" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="issuingAuthority"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Issuing Authority</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Enter issuing authority" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="registrationNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Registration Number*</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="issuingAuthority"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Issuing Authority*</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </div>
             )}
             
             {step === 2 && (
               <div className="space-y-4">
+                <h3 className="text-lg font-medium">Point of Contact</h3>
+                <Separator className="my-4" />
+                
                 <FormField
                   control={form.control}
-                  name="contactName"
+                  name="representativeName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Name of Authorized Representative</FormLabel>
+                      <FormLabel>Name of Authorized Representative*</FormLabel>
                       <FormControl>
-                        <Input placeholder="Enter full name" {...field} />
+                        <Input {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -370,9 +494,9 @@ const NGORegistrationForm = () => {
                   name="designation"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Designation</FormLabel>
+                      <FormLabel>Designation*</FormLabel>
                       <FormControl>
-                        <Input placeholder="Enter designation" {...field} />
+                        <Input {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -381,12 +505,12 @@ const NGORegistrationForm = () => {
                 
                 <FormField
                   control={form.control}
-                  name="phoneNumber"
+                  name="phone"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Phone Number</FormLabel>
+                      <FormLabel>Phone Number*</FormLabel>
                       <FormControl>
-                        <Input placeholder="Enter phone number" {...field} />
+                        <Input {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -395,40 +519,12 @@ const NGORegistrationForm = () => {
                 
                 <FormField
                   control={form.control}
-                  name="email"
+                  name="contactEmail"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Email Address</FormLabel>
+                      <FormLabel>Email ID*</FormLabel>
                       <FormControl>
-                        <Input type="email" placeholder="Enter email address" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Password</FormLabel>
-                      <FormControl>
-                        <Input type="password" placeholder="Create password" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="confirmPassword"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Confirm Password</FormLabel>
-                      <FormControl>
-                        <Input type="password" placeholder="Confirm password" {...field} />
+                        <Input {...field} type="email" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -439,44 +535,119 @@ const NGORegistrationForm = () => {
             
             {step === 3 && (
               <div className="space-y-4">
+                <h3 className="text-lg font-medium">Documents Upload</h3>
+                <Separator className="my-4" />
+                <p className="text-sm text-muted-foreground">
+                  Please upload the following documents. All files should be in PDF format.
+                </p>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1" htmlFor="registrationCertificate">
+                      NGO Registration Certificate* (PDF)
+                    </label>
+                    <Input
+                      id="registrationCertificate"
+                      type="file"
+                      accept=".pdf"
+                      onChange={(e) => handleDocumentChange(e, 'registrationCertificate')}
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-1" htmlFor="panCard">
+                      PAN Card* (PDF)
+                    </label>
+                    <Input
+                      id="panCard"
+                      type="file"
+                      accept=".pdf"
+                      onChange={(e) => handleDocumentChange(e, 'panCard')}
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-1" htmlFor="taxCertificate">
+                      80G / 12A Certificate (if available) (PDF)
+                    </label>
+                    <Input
+                      id="taxCertificate"
+                      type="file"
+                      accept=".pdf"
+                      onChange={(e) => handleDocumentChange(e, 'taxCertificate')}
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-1" htmlFor="fcraCertificate">
+                      FCRA Certificate (if available) (PDF)
+                    </label>
+                    <Input
+                      id="fcraCertificate"
+                      type="file"
+                      accept=".pdf"
+                      onChange={(e) => handleDocumentChange(e, 'fcraCertificate')}
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-1" htmlFor="idProof">
+                      ID Proof of Signatory* (Aadhar/Passport) (PDF)
+                    </label>
+                    <Input
+                      id="idProof"
+                      type="file"
+                      accept=".pdf"
+                      onChange={(e) => handleDocumentChange(e, 'idProof')}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {step === 4 && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Mission & Focus</h3>
+                <Separator className="my-4" />
+                
                 <FormField
                   control={form.control}
                   name="causes"
                   render={() => (
                     <FormItem>
                       <div className="mb-4">
-                        <FormLabel className="text-base">What causes does your NGO serve?</FormLabel>
+                        <FormLabel>What causes does your NGO serve?* (Select multiple)</FormLabel>
                         <FormDescription>
-                          Select all that apply
+                          Choose all that apply
                         </FormDescription>
                       </div>
-                      {causeOptions.map((cause) => (
+                      {causeOptions.map((item) => (
                         <FormField
-                          key={cause}
+                          key={item.id}
                           control={form.control}
                           name="causes"
                           render={({ field }) => {
                             return (
                               <FormItem
-                                key={cause}
+                                key={item.id}
                                 className="flex flex-row items-start space-x-3 space-y-0"
                               >
                                 <FormControl>
                                   <Checkbox
-                                    checked={field.value?.includes(cause)}
+                                    checked={field.value?.includes(item.label)}
                                     onCheckedChange={(checked) => {
                                       return checked
-                                        ? field.onChange([...field.value, cause])
+                                        ? field.onChange([...field.value, item.label])
                                         : field.onChange(
                                             field.value?.filter(
-                                              (value) => value !== cause
+                                              (value) => value !== item.label
                                             )
                                           )
                                     }}
                                   />
                                 </FormControl>
                                 <FormLabel className="font-normal">
-                                  {cause}
+                                  {item.label}
                                 </FormLabel>
                               </FormItem>
                             )
@@ -496,59 +667,44 @@ const NGORegistrationForm = () => {
                       <FormItem>
                         <FormLabel>Please specify other cause</FormLabel>
                         <FormControl>
-                          <Input placeholder="Enter other cause" {...field} />
+                          <Input {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                 )}
-                
-                <FormField
-                  control={form.control}
-                  name="agreeTerms"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>
-                          I agree to the terms and conditions
-                        </FormLabel>
-                        <FormDescription>
-                          You agree to our terms of service and privacy policy.
-                        </FormDescription>
-                      </div>
-                    </FormItem>
-                  )}
-                />
               </div>
             )}
             
-            <div className="flex justify-between">
+            <div className="flex justify-between mt-8">
               {step > 1 && (
                 <Button type="button" variant="outline" onClick={prevStep}>
                   Previous
                 </Button>
               )}
               
-              {step < 3 ? (
+              {step < 4 ? (
                 <Button type="button" onClick={nextStep}>
                   Next
                 </Button>
               ) : (
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? "Registering..." : "Complete Registration"}
+                <Button type="submit" disabled={loading}>
+                  {loading ? "Submitting..." : "Complete Registration"}
                 </Button>
               )}
             </div>
           </form>
         </Form>
       </CardContent>
+      <CardFooter className="flex justify-center border-t pt-6">
+        <div className="flex space-x-2">
+          <div className={`h-2 w-2 rounded-full ${step >= 1 ? 'bg-primary' : 'bg-gray-300'}`}></div>
+          <div className={`h-2 w-2 rounded-full ${step >= 2 ? 'bg-primary' : 'bg-gray-300'}`}></div>
+          <div className={`h-2 w-2 rounded-full ${step >= 3 ? 'bg-primary' : 'bg-gray-300'}`}></div>
+          <div className={`h-2 w-2 rounded-full ${step >= 4 ? 'bg-primary' : 'bg-gray-300'}`}></div>
+        </div>
+      </CardFooter>
     </Card>
   );
 };

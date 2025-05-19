@@ -10,3 +10,53 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 // import { supabase } from "@/integrations/supabase/client";
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+// Helper function to get the currently authenticated user
+export const getCurrentUser = async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
+};
+
+// Helper function to get user profile based on role
+export const getUserProfile = async (userId: string, role: string) => {
+  let data = null;
+  let error = null;
+
+  switch (role) {
+    case 'ngo':
+      const ngoResult = await supabase
+        .from('ngo_profiles')
+        .select(`
+          *,
+          ngo_contacts(*),
+          ngo_causes(*, causes(*))
+        `)
+        .eq('id', userId)
+        .single();
+      data = ngoResult.data;
+      error = ngoResult.error;
+      break;
+    case 'donor':
+      const donorResult = await supabase
+        .from('donor_profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      data = donorResult.data;
+      error = donorResult.error;
+      break;
+    case 'volunteer':
+      const volunteerResult = await supabase
+        .from('volunteer_profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      data = volunteerResult.data;
+      error = volunteerResult.error;
+      break;
+    default:
+      break;
+  }
+
+  return { data, error };
+};
